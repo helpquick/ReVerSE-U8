@@ -1042,7 +1042,7 @@ str1	db 23,0,0,17,#47,"ReVerSE-U8 DevBoard",17,7
 	db 13,"(build 20151004) By MVV"
 	db 13,13,"ASP configuration device ID 0x",0	; EPCS1	0x10 (1 Mb), EPCS4 0x12 (4 Mb), EPCS16 0x14 (16 Mb), EPCS64 0x16 (64 Mb)
 str5	db "Copying data from FLASH...",0
-str8	db 13,"Loading: roms/zxevo.rom...",0
+str8	db 13,"Loading roms/zxevo.rom...",0
 str3	db 17,4," Done",17,7,0
 str4	db 13,13,"RTC data read...",0
 str0	db 23,0,22,"Press ENTER to continue         "
