@@ -1,7 +1,8 @@
 -------------------------------------------------------------------[21.07.2014]
 -- SDRAM Controller 
 -------------------------------------------------------------------------------
--- V0.1		21.07.2014	первая версия
+-- 21.07.2014	Initial version
+-- 04.10.2015	Adapted for SDRAM 8bit not DQM signal (shurik-ua)
 
 -- CLK		= 84 MHz	= 11.9 ns
 -- WR/RD	= 5T		= 59.5 ns  
@@ -50,7 +51,7 @@ end sdram;
 architecture rtl of sdram is
 	signal state 		: unsigned(4 downto 0) := "00000";
 	signal address 		: std_logic_vector(23 downto 0);
-	signal bsel_int 	: std_logic_vector(1 downto 0);
+--	signal bsel_int 	: std_logic_vector(1 downto 0);
 	signal rfsh_cnt 	: unsigned(9 downto 0) := "0000000000";
 	signal rfsh_req		: std_logic := '0';
 	signal data_reg		: std_logic_vector(15 downto 0);
@@ -60,6 +61,8 @@ architecture rtl of sdram is
 	signal data_in	   	: std_logic_vector(15 downto 0);
 	signal idle1		: std_logic;
 	signal req_dis		: std_logic;
+	signal bsel_adr		: std_logic;
+	signal bsel_xor		: std_logic;
 	------------------------------
 	signal WR_in		: std_logic;
 	signal WR_in1		: std_logic;
@@ -105,7 +108,7 @@ begin
 		if rising_edge (clk_28MHz) and (c0 = '1') then
 			RD_in 	<= '0';
 			WR_in 	<= '0';
-			RFSH_in 	<= '0';
+			RFSH_in <= '0';
 		end if;
 	end process;
 	
@@ -127,7 +130,7 @@ begin
 					state <= state + 1;
 				when "10001" =>					-- s11
 					sdr_cmd <= SdrCmd_ms;			-- LOAD MODE REGISTER
-					sdr_a <= "000" & "0" & "00" & "010" & "0" & "001";	-- BURST (2byte) read/write			
+					sdr_a <= "000" & "0" & "00" & "010" & "0" & "000";	-- BURST (2byte) read/write			
 					state <= state + 1;
 
 				-- Idle		
@@ -135,7 +138,7 @@ begin
 					sdr_dq <= (others => 'Z');
 					if RD_in = '1' then
 						idle1 <= '0';
-						bsel_int <= bsel;  
+--						bsel_int <= bsel;  
 						address <= A;        		-- LOCK ADDR
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
 						sdr_ba1 <= A(10);           	-- A(8)
@@ -145,7 +148,9 @@ begin
 					elsif WR_in = '1' and (loader = '1' or A(21) = '0') then --Rising UP
 						idle1   <= '0';
 						rd_op   <= '0';
-						bsel_int <= bsel;
+--						bsel_int <= bsel;
+						bsel_adr <= bsel(1) and (not bsel(0));
+						bsel_xor <= bsel(1) xor bsel(0);
 						address <= A;
 						data_in <= DI;
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
@@ -169,24 +174,36 @@ begin
 				-- -----------------------ROW------------------------- BA1 BA0 -----------COLUMN------------		
 				when "11010" =>					-- s1A
 					sdr_cmd <= SdrCmd_rd;			-- READ (A10 = 1 enable auto precharge; A7..0 = column)
-					sdr_a <= "001" & address(8 downto 0) & '0'; -- побайтное обращение
-					sdr_dqml <= '0'; 			-- 0-ACTIVE
+					sdr_a <= "001" & address(8 downto 0) & '0'; -- пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+--					sdr_dqml <= '0'; 			-- 0-ACTIVE
 					state <= "11110";			-- s1E
 					rd_op <= '1';
 					sdr_dq <= (others => 'Z');
+				when "11110" =>					-- s1E	
+					sdr_cmd <= SdrCmd_rd;			-- READ (A10 = 1 enable auto precharge; A7..0 = column)
+					sdr_a <= "001" & address(8 downto 0) & '1';
+--					sdr_dqml <= '0'; 			-- 0-ACTIVE
+					state <= "10110";			-- s16					
 				when "11100" =>					-- s1C
 					sdr_cmd <= SdrCmd_wr;			-- WRITE (A10 = 1 enable auto precharge; A7..0 = column)
-					sdr_a <= "001" & address(8 downto 0) & '0'; --FIRST BYTE A(0) = 0
-					sdr_dqml <= not bsel_int(0);     	-- LO byte
-					sdr_dq(7 downto 0)   <= data_in(7 downto 0);
+					sdr_a <= "001" & address(8 downto 0) & bsel_adr; --FIRST BYTE A(0) = 0
+--					sdr_dqml <= not bsel_int(0);     	-- LO byte
+					if bsel_adr = '0' then 
+						sdr_dq(7 downto 0)   <= data_in(7 downto 0);
+					else
+						sdr_dq(7 downto 0)   <= data_in(15 downto 8);
+					end if;						
 					state <= "11101";			-- s1D
 				when "11101" =>					-- s1D	
-					sdr_cmd <= SdrCmd_xx;            	-- No operation
-					sdr_dqml <= not bsel_int(1);   		--LO byte
-					sdr_dq(7 downto 0)  <= data_in(15 downto 8);
-					state <= "10110";			-- s16
-				when "11110" =>					-- s1E	
-					sdr_cmd <= SdrCmd_xx;            	-- No operation
+					if bsel_xor = '1' then
+						sdr_cmd <= SdrCmd_xx;            	-- No operation
+						sdr_dq <= (others => 'Z');
+					else
+						sdr_cmd <= SdrCmd_wr;			-- WRITE (A10 = 1 enable auto precharge; A7..0 = column)
+						sdr_a <= "001" & address(8 downto 0) & '1'; --FIRST BYTE A(0) = 0
+						sdr_dq(7 downto 0)  <= data_in(15 downto 8);						
+					end if;
+--					sdr_dqml <= not bsel_int(1);   		--LO byte
 					state <= "10110";			-- s16
 				when others =>
 					sdr_dq <= (others => 'Z');

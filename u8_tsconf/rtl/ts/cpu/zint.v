@@ -2,18 +2,14 @@
 module zint
 (
 	input  wire clk,
-	input  wire zclk,
+	input  wire zpos,
 	input  wire res,
 	input  wire int_start_frm,
 	input  wire int_start_lin,
 	input  wire int_start_dma,
 	input  wire vdos,
 	input  wire intack,
-	
-	//input wire [2:0] im2v_frm,
-	//input wire [2:0] im2v_lin,
-	//input wire [2:0] im2v_dma,
-	input wire 	[7:0] intmask,
+	input wire  [7:0] intmask,
 	output wire [7:0] im2vect,
 	
 	output wire int_n
@@ -23,15 +19,6 @@ module zint
 	// For Frame, Line INT its generation is blocked, it will be lost.
 	// For DMA INT only its output is blocked, so DMA ISR will will be processed as soon as returned from VDOS.
 	
-	// IM2 Vector priority ============ OLD 
-	//assign im2vect = {vect[int_sel], 1'b1};
-	//wire [6:0] vect [0:3];
-	//assign vect[INTFRM] = {4'b1111, im2v_frm};
-	//assign vect[INTLIN] = {4'b1110, im2v_lin};
-	//assign vect[INTDMA] = {4'b1101, im2v_dma};
-	//assign vect[INTDUM] = {4'b1101, im2v_dma};
-	
-	//================================== NEW
 	assign im2vect = {vect[int_sel]};
 
 	wire [7:0] vect [0:3];
@@ -41,7 +28,7 @@ module zint
 	assign vect[INTDUM] = 8'hFF;
 
 	assign int_n = int_all ? 1'b0 : 1'b1;
-	wire int_all = int_frm || int_lin || (int_dma && !vdos);
+	wire int_all = (int_frm || int_lin || int_dma) && !vdos;
 		
 	//===========================================================
 	wire dis_int_frm = !intmask[0];
@@ -75,7 +62,7 @@ module zint
 // ~INT generating
 	reg int_frm;
 	always @(posedge clk)
-		if (res || dis_int_frm || vdos)
+		if (res || dis_int_frm)
 			int_frm <= 1'b0;
 		else if (int_start_frm)
 			int_frm <= 1'b1;
@@ -84,11 +71,11 @@ module zint
 
 	reg int_lin;
 	always @(posedge clk)
-		if (res || dis_int_lin || vdos)
+		if (res || dis_int_lin)
 			int_lin <= 1'b0;
 		else if (int_start_lin)
 			int_lin <= 1'b1;
-		else if (intack_s && !int_frm)		// priority 1
+		else if (intack_s && !int_frm)			// priority 1
 			int_lin <= 1'b0;
 
 	reg int_dma;
@@ -97,7 +84,7 @@ module zint
 			int_dma <= 1'b0;
 		else if (int_start_dma)
 			int_dma <= 1'b1;
-		else if (intack_s && !int_frm && !int_lin)		// priority 2
+		else if (intack_s && !int_frm && !int_lin)	// priority 2
 			int_dma <= 1'b0;
 
 
@@ -109,12 +96,14 @@ module zint
 	wire intctr_fin = intctr[5];   // 32 clks
 
 	
-	always @(posedge zclk, posedge int_start_lin)
+//	always @(posedge zclk, posedge int_start_lin)
+	always @(posedge clk, posedge int_start_frm)
 	begin
-		if (int_start_lin)
-			intctr <= 0;
-		else if (!intctr_fin)
-			intctr <= intctr + 1;
+//		if (int_start_lin)
+		if (int_start_frm)
+			intctr <= 6'b000000;
+		else if (zpos && !intctr_fin && !vdos)
+			intctr <= intctr + 6'b000001;
 	end
 			
 endmodule

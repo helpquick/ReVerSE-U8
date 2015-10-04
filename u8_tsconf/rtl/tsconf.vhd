@@ -1,17 +1,20 @@
--------------------------------------------------------------------[21.09.2014]
--- u8-TSConf Version 0.2.6 By MVV
--- DEVBOARD ReVerSE-U8
+-------------------------------------------------------------------[04.10.2015]
+-- u8-TSConf build 20151004 By MVV
+-- DEVBOARD ReVerSE-U8 By MVV
 -------------------------------------------------------------------------------
--- V0.1.0	27.07.2014	: первая версия
--- V0.2.1	03.07.2014	: перенос с U16
--- V0.2.2	05.07.2014	: доработка keyboard.vhd для работы с WC, I2S, Mouse
--- V0.2.6	09.09.2014	: добавлена поддержка IDE Video DAC (3:3:3) (zports.v, video_out.v, lut.vhd)
--- V0.2.7	21.09.2014	: tv80s вместо t80
+-- 27.07.2014	первая версия
+-- 03.07.2014	перенос с U16
+-- 05.07.2014	доработка keyboard.vhd для работы с WC, I2S, Mouse
+-- 09.09.2014	добавлена поддержка IDE Video DAC (3:3:3) (zports.v, video_out.v, lut.vhd)
+-- 21.09.2014	tv80s вместо t80 (биения бордюрных эффектов)
+-- 25.07.2015	в загрузчике добавлена загрузка ROMS/ZXEVO.ROM с SD Card FAT32
+-- 04.10.2015	доработка sdram.vhd для U8 (автор shurik-ua)
 
+-- https://github.com/mvvproject/ReVerSE-U8
 -- http://tslabs.info/forum/viewtopic.php?f=31&t=401
 -- http://zx-pk.ru/showthread.php?t=23528
 
--- Copyright (c) 2014 MVV, TS-Labs, dsp
+-- Copyright © 2014-2015 MVV, shurik-ua, TS-Labs, dsp
 --
 -- All rights reserved
 --
@@ -60,7 +63,7 @@ port (
 	SDRAM_A			: out std_logic_vector(12 downto 0);
 	SDRAM_BA		: out std_logic_vector(1 downto 0);
 	SDRAM_CLK		: out std_logic;
-	SDRAM_DQML		: out std_logic;
+--	SDRAM_DQML		: out std_logic;
 	SDRAM_WE_N		: out std_logic;
 	SDRAM_CAS_N		: out std_logic;
 	SDRAM_RAS_N		: out std_logic;
@@ -93,8 +96,8 @@ port (
 	VS			: out std_logic;
 	-- SD/MMC Memory Card
 --	SD_DET_N		: in std_logic;
-	SD_MISO			: in std_logic;
-	SD_MOSI			: out std_logic;
+	SD_SO			: in std_logic;
+	SD_SI			: out std_logic;
 	SD_CLK			: out std_logic;
 	SD_CS_N			: out std_logic;
 	-- PS/2
@@ -357,32 +360,22 @@ signal cpu_spi_din		: std_logic_vector(7 downto 0);
 signal spi_dout			: std_logic_vector(7 downto 0);
 -- Keys
 signal key_f			: std_logic_vector(4 downto 0);
-signal key			: std_logic_vector(4 downto 0) := "00000";
+signal key			: std_logic_vector(4 downto 0) := "00100";
 -- SPI
 signal spi_wr			: std_logic;
 signal spi_do_bus		: std_logic_vector(7 downto 0);
 signal spi_busy			: std_logic;
+signal spi_cs_n			: std_logic;
+signal spi_so			: std_logic;
+signal spi_si			: std_logic;
+signal spi_clk			: std_logic;
+
 -- GS
 signal clk_21mhz		: std_logic;
 -- I2C
 signal i2c_do_bus		: std_logic_vector(7 downto 0);
 signal i2c_wr			: std_logic;
--- Z-Controller
-signal zc_rd			: std_logic;
-signal zc_wr			: std_logic;
-signal zc_do_bus		: std_logic_vector(7 downto 0);
-signal zc_mosi			: std_logic;
-signal zc_clk			: std_logic;
-signal zc_cs_n			: std_logic;
--- TS SD
-signal sd_si_ts			: std_logic;
-signal sd_clk_ts		: std_logic;
-signal sd_cs_n_ts		: std_logic;
 
-signal spi_so			: std_logic;
-signal spi_si			: std_logic;
-signal spi_clk			: std_logic;
-signal spi_cs_n			: std_logic;
 -- General Sound
 signal gs_a			: std_logic_vector(13 downto 0);
 signal gs_b			: std_logic_vector(13 downto 0);
@@ -577,14 +570,6 @@ port (
 	beeper_wr		: out std_logic; 
 	rstrom			: in std_logic_vector(1 downto 0);
 	tape_read		: in std_logic;
-	ide_in			: in std_logic_vector(15 downto 0);
-	ide_out			: out std_logic_vector(15 downto 0);
-	ide_cs0_n		: out std_logic;
-	ide_cs1_n 		: out std_logic;
-	ide_req			: out std_logic;
-	ide_stb			: in std_logic;
-	ide_ready		: in std_logic;
-	ide_stall		: out std_logic;
 	keys_in			: in std_logic_vector(4 downto 0);	-- keys (port FE)
 	mus_in			: in std_logic_vector(7 downto 0); 	-- mouse (xxDF)
 	kj_in			: in std_logic_vector(4 downto 0);
@@ -853,16 +838,13 @@ end component;
 component zint is
 port (
 	clk 			: in std_logic; 
-	zclk 			: in std_logic; 
+	zpos 			: in std_logic; 
 	res 			: in std_logic; 
 	int_start_frm 		: in std_logic;
 	int_start_lin 		: in std_logic;
 	int_start_dma 		: in std_logic;
 	vdos			: in std_logic; 
 	intack			: in std_logic; 
-	--im2v_frm		: in std_logic_vector(2 downto 0);
-	--im2v_lin		: in std_logic_vector(2 downto 0);
-	--im2v_dma		: in std_logic_vector(2 downto 0); 
 	intmask			: in std_logic_vector(7 downto 0);  
 	im2vect			: out std_logic_vector(7 downto 0); 	
 	int_n			: out std_logic);
@@ -915,56 +897,56 @@ port map (
 	external_port 		=> '0',
 	turbo			=> turbo);
 
--- Zilog Z80A CPU
-TS03: tv80s
-port map (
-	reset_n			=> not reset,
-	clk			=> zclk,
-	wait_n			=> '1',
-	int_n			=> cpu_int_n_TS,
-	nmi_n			=> '1',
-	busrq_n			=> '1',
-	m1_n			=> cpu_m1_n,
-	mreq_n			=> cpu_mreq_n,
-	iorq_n			=> cpu_iorq_n,
-   	rd_n			=> cpu_rd_n,
-	wr_n			=> cpu_wr_n,
-	rfsh_n			=> cpu_rfsh_n,
-	halt_n			=> open,
-	busak_n			=> open,
-	A			=> cpu_a_bus,
-	DI			=> cpu_di_bus,
-	DOUT			=> cpu_do_bus);
-
---z80_unit: entity work.T80s
---generic map (
---	Mode			=> 0,	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
---	T2Write			=> 1,	-- 0 => WR_n active in T3, 1 => WR_n active in T2
---	IOWait			=> 1)	-- 0 => Single cycle I/O, 1 => Std I/O cycle
+-- Z80 CPU
+--TS03: tv80s
 --port map (
---	RESET_n			=> not reset,
---	CLK_n			=> zclk,
---	WAIT_n			=> '1',
---	INT_n			=> cpu_int_n_TS or (dram_req and key_f(4)),
---	NMI_n			=> '1',
---	BUSRQ_n			=> '1',
---	M1_n			=> cpu_m1_n,
---	MREQ_n			=> cpu_mreq_n,
---	IORQ_n			=> cpu_iorq_n,
---	RD_n			=> cpu_rd_n,
---	WR_n			=> cpu_wr_n,
---	RFSH_n			=> cpu_rfsh_n,
---	HALT_n			=> open,
---	BUSAK_n			=> open,
+--	reset_n			=> not reset,
+--	clk			=> zclk,
+--	wait_n			=> '1',
+--	int_n			=> cpu_int_n_TS,
+--	nmi_n			=> '1',
+--	busrq_n			=> '1',
+--	m1_n			=> cpu_m1_n,
+--	mreq_n			=> cpu_mreq_n,
+--	iorq_n			=> cpu_iorq_n,
+--   	rd_n			=> cpu_rd_n,
+--	wr_n			=> cpu_wr_n,
+--	rfsh_n			=> cpu_rfsh_n,
+--	halt_n			=> open,
+--	busak_n			=> open,
 --	A			=> cpu_a_bus,
 --	DI			=> cpu_di_bus,
---	DO			=> cpu_do_bus,
---	SavePC      		=> open,
---	SaveINT     		=> open,
---	RestorePC   		=> (others => '1'),
---	RestoreINT  		=> (others => '1'),
---	RestorePC_n 		=> '1');
+--	DOUT			=> cpu_do_bus);
 
+TS03: entity work.T80s
+generic map (
+	Mode			=> 0,	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
+	T2Write			=> 1,	-- 0 => WR_n active in T3, 1 => WR_n active in T2
+	IOWait			=> 1)	-- 0 => Single cycle I/O, 1 => Std I/O cycle
+port map (
+	RESET_n			=> not reset,
+	CLK_n			=> zclk,
+	WAIT_n			=> '1',
+	INT_n			=> cpu_int_n_TS,
+	NMI_n			=> '1',
+	BUSRQ_n			=> '1',
+	M1_n			=> cpu_m1_n,
+	MREQ_n			=> cpu_mreq_n,
+	IORQ_n			=> cpu_iorq_n,
+	RD_n			=> cpu_rd_n,
+	WR_n			=> cpu_wr_n,
+	RFSH_n			=> cpu_rfsh_n,
+	HALT_n			=> open,
+	BUSAK_n			=> open,
+	A			=> cpu_a_bus,
+	DI			=> cpu_di_bus,
+	DO			=> cpu_do_bus,
+	SavePC      		=> open,
+	SaveINT     		=> open,
+	RestorePC   		=> (others => '1'),
+	RestoreINT  		=> (others => '1'),
+	RestorePC_n 		=> '1');
+	
 TS04: zsignals
 port map (
 	clk			=> clk_28mhz,
@@ -1002,14 +984,14 @@ port map (
 
 TS05: zports
 port map (
-	zclk    		=> zclk,
+	zclk    		=> clk_28mhz,--zclk,
 	clk			=> clk_28mhz,
 	din			=> cpu_do_bus,
 	dout			=> dout_ports,
 	dataout			=> ena_ports,
 	a			=> cpu_a_bus,
 	rst			=> reset,
-	loader   		=> loader, 		-- for load ROM, SPI should be enable 
+	loader   		=> '0', 		-- for load ROM, SPI should be enable 
 	opfetch			=> opfetch, 		-- from zsignals
 	rd			=> rd,
 	wr			=> wr,
@@ -1056,9 +1038,6 @@ port map (
 	memconf			=> memconf,
 	cacheconf     		=> cacheconf,
 	fddvirt			=> open,
-	--im2v_frm		=> im2v_frm,
-	--im2v_lin		=> im2v_lin,
-	--im2v_dma		=> im2v_dma,
 	intmask			=> intmask,
 	dmaport_wr		=> dmaport_wr, 		-- dmaport_wr
 	dma_act			=> dma_act, 		-- from DMA (status of DMA) 
@@ -1072,14 +1051,14 @@ port map (
 	beeper_wr		=> open,
 	rstrom			=> "11",
 	tape_read		=> '1',
-	ide_in			=> "0000000000000000",
-	ide_out			=> open,
-	ide_cs0_n		=> open,
-	ide_cs1_n 		=> open,
-	ide_req			=> open,
-	ide_stb			=> '0',
-	ide_ready		=> '0',
-	ide_stall		=> open,
+--	ide_in			=> "0000000000000000",
+--	ide_out			=> open,
+--	ide_cs0_n		=> open,
+--	ide_cs1_n 		=> open,
+--	ide_req			=> open,
+--	ide_stb			=> '0',
+--	ide_ready		=> '0',
+--	ide_stall		=> open,
 	keys_in			=> kb_do_bus,  		-- keys (port FE)
 	mus_in			=> "00000000",		-- mouse (xxDF)
 	kj_in			=> kb_joy_bus,
@@ -1088,7 +1067,7 @@ port map (
 	vg_cs_n			=> open,
 	vg_wrFF			=> open,
 	drive_sel		=> open,		-- disk drive selection
-	sdcs_n			=> sd_cs_n_ts,   	-- to SD card
+	sdcs_n			=> SD_CS_N,   		-- to SD card
 	sd_start		=> cpu_spi_req, 	-- to SPI
 	sd_datain		=> cpu_spi_din,	 	-- to SPI(7 downto 0);
 	sd_dataout		=> spi_dout, 		-- from SPI(7 downto 0); 
@@ -1327,9 +1306,9 @@ port map (
 TS11: spi
 port map (
 	clk			=> clk_28mhz,
-	sck   			=> sd_clk_ts,
-	sdo			=> sd_si_ts,
-	sdi			=> SD_MISO,
+	sck   			=> SD_CLK,
+	sdo			=> SD_SI,
+	sdi			=> SD_SO,
 	stb			=> spi_stb,
 	start			=> spi_start,
 	bsync			=> open,
@@ -1340,20 +1319,17 @@ port map (
 	dout			=> spi_dout,
 	speed			=> "00",
 	tst 			=> open);
-
+	
 TS13: zint
 port map (
 	clk 			=> clk_28mhz,
-	zclk 			=> zclk, 
+	zpos 			=> zpos, 
 	res 			=> reset,
 	int_start_frm 		=> int_start_frm,	--< N1 VIDEO
 	int_start_lin 		=> int_start_lin,	--< N2 VIDEO
 	int_start_dma 		=> int_start_dma,	--< N3 DMA
 	vdos			=> pre_vdos, 		-- vdos,--pre_vdos
 	intack			=> intack, 		--< zsignals  === (intack ? im2vect : 8'hFF)));
-	--im2v_frm		=> im2v_frm, 		--< ZPORT (2 downto 0); 
-	--im2v_lin		=> im2v_lin, 		--< ZPORT (2 downto 0);
-	--im2v_dma		=> im2v_dma, 		--< ZPORT (2 downto 0);
 	intmask			=> intmask, 		--< ZPORT (7 downto 0);
 	im2vect			=> im2vect, 		--> CPU Din (2 downto 0); 	
 	int_n			=> cpu_int_n_TS);
@@ -1395,7 +1371,7 @@ port map (
 	BA0			=> SDRAM_BA(0),
 	MA			=> SDRAM_A,
 	DQ			=> SDRAM_DQ,
-	DQML     		=> SDRAM_DQML);
+	DQML     		=> open);	--SDRAM_DQML);
 
 SE5: entity work.keyboard
 port map(
@@ -1438,33 +1414,45 @@ port map (
 	OUTC			=> covox_c,
 	OUTD			=> covox_d);
 		
--- TurboSound (ay8910)
+-- TurboSound
 SE12: entity work.turbosound
 port map (
-	RESET			=> reset,
-	CLK			=> clk_28mhz,
-	ENA			=> ena_1_75mhz,
-	A			=> cpu_a_bus,
-	DI			=> cpu_do_bus,
-	WR_n			=> cpu_wr_n,
-	IORQ_n			=> cpu_iorq_n,
-	M1_n			=> cpu_m1_n,
-	SEL			=> ssg_sel,
-	CN0_DO			=> ssg_cn0_bus,
-	CN0_A			=> ssg_cn0_a,
-	CN0_B			=> ssg_cn0_b,
-	CN0_C			=> ssg_cn0_c,
-	CN1_DO			=> ssg_cn1_bus,
-	CN1_A			=> ssg_cn1_a,
-	CN1_B			=> ssg_cn1_b,
-	CN1_C			=> ssg_cn1_c);
+	I_CLK		=> clk_28mhz,
+	I_CLKSSG	=> ena_1_75mhz,
+	I_ADDR		=> cpu_a_bus,
+	I_DATA		=> cpu_do_bus,
+	I_WR_N		=> cpu_wr_n,
+	I_IORQ_N	=> cpu_iorq_n,
+	I_M1_N		=> cpu_m1_n,
+	I_RESET_N	=> not reset,
+	O_SEL		=> ssg_sel,
+	-- ssg0
+	I_SSG0_IOA	=> (others => '1'),
+	O_SSG0_IOA	=> open,
+	I_SSG0_IOB	=> (others => '1'), 
+	O_SSG0_IOB	=> open,
+	O_SSG0_DA	=> ssg_cn0_bus,
+	O_SSG0_AUDIO	=> open,
+	O_SSG0_AUDIO_A	=> ssg_cn0_a,
+	O_SSG0_AUDIO_B	=> ssg_cn0_b,
+	O_SSG0_AUDIO_C	=> ssg_cn0_c,
+	-- ssg1
+	I_SSG1_IOA	=> (others => '1'),
+	O_SSG1_IOA	=> open,
+	I_SSG1_IOB	=> (others => '1'),
+	O_SSG1_IOB	=> open,
+	O_SSG1_DA	=> ssg_cn1_bus,
+	O_SSG1_AUDIO	=> open,
+	O_SSG1_AUDIO_A	=> ssg_cn1_a,
+	O_SSG1_AUDIO_B	=> ssg_cn1_b,
+	O_SSG1_AUDIO_C	=> ssg_cn1_c);
 
--- SPI FLASH 25MHz Max SCK
+-- SPI FLASH M25P40
 U8: entity work.spi_flash
 port map (
 	RESET			=> reset,
 	CLK			=> clk_28mhz,
-	SCK			=> clk_21mhz,
+	SCK			=> f0,
 	A			=> cpu_a_bus(0),
 	DI			=> cpu_do_bus,
 	DO			=> spi_do_bus,
@@ -1487,23 +1475,6 @@ port map (
 	WR			=> i2c_wr,
 	I2C_SCL			=> SCL,
 	I2C_SDA			=> SDA);
-
--- Z-Controller
-SE8: entity work.zcontroller
-port map (
-	RESET			=> reset,
-	CLK			=> clk_28mhz,
-	A			=> cpu_a_bus(5),
-	DI			=> cpu_do_bus,
-	DO			=> zc_do_bus,
-	RD			=> zc_rd,
-	WR			=> zc_wr,
-	SDDET			=> '0',
-	SDPROT			=> '0',
-	CS_n			=> zc_cs_n,
-	SCLK			=> zc_clk,
-	MOSI			=> zc_mosi,
-	MISO			=> SD_MISO);
 
 -- VS1053 SPI Controller
 U10: entity work.vs1053
@@ -1587,9 +1558,9 @@ port map (
 -------------------------------------------------------------------------------
 -- Global
 -------------------------------------------------------------------------------
-areset <= not RESET_N;
-reset <= areset or not locked or (kb_f_bus(0));
-go_arbiter <= go;
+areset 		<= not RESET_N;
+reset 		<= areset or not locked or (kb_f_bus(0));
+go_arbiter 	<= go;
 
 process (clk_28mhz)
 begin
@@ -1601,15 +1572,15 @@ begin
 end process;
 
 -- CPU interface
-cpu_addr_ext <= "100" when (loader = '1' and cpu_a_bus(15 downto 14) = "11") else csvrom & "00"; --- ROM csrom (only for BANK0)
+cpu_addr_ext <= "100" when (loader = '1' and cpu_a_bus(15) = '1') else csvrom & "00"; --- ROM csrom (only for BANK0)
 dram_rdata <= sdr_do_bus_16;
 
-cpu_di_bus <=	rom_do_bus when (loader = '1' and cpu_mreq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(15 downto 14) = "00") else
+cpu_di_bus <=	rom_do_bus when (loader = '1' and cpu_mreq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(15 downto 13) = "000") else
 		sdr_do_bus when (cpu_mreq_n = '0' and cpu_rd_n = '0') else 	-- SDRAM
-		zc_do_bus when (loader = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(7 downto 6) = "01" and cpu_a_bus(4 downto 0) = "10111") else 
-		vs_do_bus when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 1) = "0000010") else 										-- VS1053
-		spi_do_bus when (loader = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"02") else
-		spi_busy & "1111111" when (loader = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"03") else
+		
+		vs_do_bus when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 1) = "0000010") else 	-- VS1053
+		spi_do_bus when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"02") else
+		spi_busy & "1111111" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"03") else
 		mc146818a_do_bus when (cpu_iorq_n = '0' and cpu_rd_n = '0' and port_bff7 = '1' and port_eff7_reg(7) = '1') else -- MC146818A
 		gs_do_bus when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 4) = "1011" and cpu_a_bus(2 downto 0) = "011") else -- General Sound
 		ssg_cn0_bus when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(15 downto 0) = "1111111111111101" and ssg_sel = '0') else -- TurboSound
@@ -1682,35 +1653,26 @@ B <= vblu_ts;
 HS <= hsync_ts;
 VS <= vsync_ts;
 
--- Z-Controller
-zc_wr <= '1' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(7 downto 6) = "01" and cpu_a_bus(4 downto 0) = "10111") else '0';
-zc_rd <= '1' when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(7 downto 6) = "01" and cpu_a_bus(4 downto 0) = "10111") else '0';
-
--- SD/MMC Z-Controller/SD TS
-SD_MOSI <= sd_si_ts when loader = '0' else zc_mosi;
-SD_CLK <= sd_clk_ts when loader = '0' else zc_clk;
-SD_CS_N <= sd_cs_n_ts when loader = '0' else zc_cs_n;
-
 -- VS1053 <> MP25P40
 process (port_xx01_reg, spi_si, spi_clk, spi_cs_n, DATA0, vs_si, vs_sclk)
 begin
 	if port_xx01_reg(0) = '0' then
-		vs_so <= DATA0;
-		spi_so <= 'X';
-		ASDO <= vs_si;
-		DCLK <= vs_sclk;
-		NCSO <= '1';
-	else
 		vs_so <= 'X';
 		spi_so <= DATA0;
 		ASDO <= spi_si;
 		DCLK <= spi_clk;
 		NCSO <= spi_cs_n;
+	else
+		vs_so <= DATA0;
+		spi_so <= 'X';
+		ASDO <= vs_si;
+		DCLK <= vs_sclk;
+		NCSO <= '1';
 	end if;
 end process;
+
 vs_cn_bus <= audio_l(7 downto 0) & audio_l(15 downto 8) & audio_r(7 downto 0) & audio_r(15 downto 8);	-- Channel0 (low byte) Channel0 (high byte) Channel1 (low byte) Channel1 (high byte)
 vs_wr <= '1' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(7 downto 1) = "0000010") else '0';
-
 
 -- Mouse
 ms_left <= not(ms_left) when (ms_but_bus(1)'event and ms_but_bus(1) = '1' and ms_but_bus(0) = '1');
@@ -1737,7 +1699,6 @@ begin
 	end if;
 end process;
 
-
 -- UART
 uart_wr <= '1' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(15 downto 0) = X"F8EF") else '0';	
 uart_rd <= '1' when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(15 downto 0) = X"F8EF") else '0';	
@@ -1753,7 +1714,5 @@ begin
 		end if;
 	end if;
 end process;
-
-
 
 end rtl;

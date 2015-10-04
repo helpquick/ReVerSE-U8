@@ -1,8 +1,8 @@
 -------------------------------------------------------------------[10.08.2013]
 -- PS/2 keyboard driver
 -------------------------------------------------------------------------------
--- V0.1 	05.10.2011	первая версия
--- V0.1.1	10.08.2013	ticksPerUsec * 3500000
+-- 05.10.2011	Initial version
+-- 10.08.2013	ticksPerUsec * 3500000
 
 -- ledStatusSupport - Enables transmission of LED states. When disbled the
 --                    caps_lock, num_lock and scroll_lock inputs are unused.

@@ -40,7 +40,7 @@ set_global_assignment -name DEVICE EP3C10E144C8
 set_global_assignment -name TOP_LEVEL_ENTITY tsconf
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "11.0 SP1"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "20:12:35  MARCH 26, 2012"
-set_global_assignment -name LAST_QUARTUS_VERSION "11.0 SP1"
+set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1.DP6"
 set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
@@ -48,7 +48,6 @@ set_global_assignment -name ENABLE_INIT_DONE_OUTPUT OFF
 
 set_location_assignment PIN_22 -to CLK
 set_location_assignment PIN_43 -to SDRAM_CLK
-set_location_assignment PIN_30 -to SDRAM_DQML
 set_location_assignment PIN_66 -to SDRAM_WE_N
 set_location_assignment PIN_67 -to SDRAM_CAS_N
 set_location_assignment PIN_68 -to SDRAM_RAS_N
@@ -118,8 +117,6 @@ set_location_assignment PIN_88 -to RESET_N
 set_location_assignment PIN_104 -to R[0]
 set_location_assignment PIN_103 -to R[1]
 set_location_assignment PIN_84 -to VS
-set_location_assignment PIN_34 -to SD_MISO
-set_location_assignment PIN_32 -to SD_MOSI
 set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS ON
 set_global_assignment -name TIMEQUEST_DO_CCPP_REMOVAL ON
 set_global_assignment -name CYCLONEII_OPTIMIZATION_TECHNIQUE BALANCED
@@ -164,6 +161,16 @@ set_location_assignment PIN_77 -to TXD
 set_location_assignment PIN_28 -to VS_XDCS
 set_location_assignment PIN_7 -to VS_XCS
 set_location_assignment PIN_24 -to VS_DREQ
+set_location_assignment PIN_32 -to SD_SI
+set_location_assignment PIN_34 -to SD_SO
+set_global_assignment -name VHDL_FILE ../rtl/t80/T80s.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80/T80_Reg.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80/T80_Pack.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80/T80_MCode.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80/T80_ALU.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80/T80.vhd
+set_global_assignment -name VHDL_FILE ../rtl/sound/YM2149_volmix.vhd
+set_global_assignment -name VHDL_FILE ../rtl/sound/vol_table_array.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/tv80/tv80s.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/tv80/tv80n.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/tv80/tv80_reg.v
@@ -177,8 +184,6 @@ set_global_assignment -name VHDL_FILE ../rtl/uart/uart.vhd
 set_global_assignment -name VHDL_FILE ../rtl/gs/gs.vhd
 set_global_assignment -name VHDL_FILE ../rtl/mouse/mouse.vhd
 set_global_assignment -name SDC_FILE u8.sdc
-set_global_assignment -name VHDL_FILE ../rtl/sd/zcontroller.vhd
-set_global_assignment -name VHDL_FILE ../rtl/dac/tda1543.vhd
 set_global_assignment -name VHDL_FILE ../rtl/i2c/i2c.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sound/soundrive.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/zsignals.v
@@ -187,20 +192,13 @@ set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/zmem.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/zmaps.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/zint.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/cpu/zclock.v
-set_global_assignment -name VHDL_FILE ../rtl/t80/T80s.vhd
 set_global_assignment -name VHDL_FILE ../rtl/tsconf.vhd
 set_global_assignment -name VHDL_FILE ../rtl/pll/altpll0.vhd
 set_global_assignment -name VHDL_FILE ../rtl/rtc/mc146818a.vhd
 set_global_assignment -name VHDL_FILE ../rtl/rtc/CMOS.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sdram/sdram.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sound/turbosound.vhd
-set_global_assignment -name VHDL_FILE ../rtl/sound/ay8910.vhd
 set_global_assignment -name VHDL_FILE ../rtl/spi/spi_flash.vhd
-set_global_assignment -name VHDL_FILE ../rtl/t80/T80_Reg.vhd
-set_global_assignment -name VHDL_FILE ../rtl/t80/T80_Pack.vhd
-set_global_assignment -name VHDL_FILE ../rtl/t80/T80_MCode.vhd
-set_global_assignment -name VHDL_FILE ../rtl/t80/T80_ALU.vhd
-set_global_assignment -name VHDL_FILE ../rtl/t80/T80.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/ts/memory/dma.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/memory/arbiter.v
 set_global_assignment -name VERILOG_FILE ../rtl/ts/common/spi.v

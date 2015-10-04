@@ -7,7 +7,7 @@
 	<width>1</width>
 	<mode>7</mode>
 	<hex_block>
-		<hex_filename>C:/_work/reverse/u8/u8_fpga/u8_tsconf/rom/gs105a.hex</hex_filename>
+		<hex_filename>../rom/gs105a.hex</hex_filename>
 		<hex_addressing>relative</hex_addressing>
 		<hex_offset>393216</hex_offset>
 	</hex_block>
@@ -19,7 +19,8 @@
 			<sof_filename>u8.sof</sof_filename>
 		</bit0>
 	</sof_data>
-	<version>4</version>
+	<version>5</version>
+	<create_cvp_file>0</create_cvp_file>
 	<options>
 		<map_file>1</map_file>
 	</options>

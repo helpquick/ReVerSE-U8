@@ -1,8 +1,8 @@
--------------------------------------------------------------------[06.09.2014]
+-------------------------------------------------------------------[18.10.2014]
 -- MC146818A REAL-TIME CLOCK PLUS RAM
 -------------------------------------------------------------------------------
--- V0.1 	05.10.2011	Initial version
--- V0.2		06.09.2014	Added General Purpose RAM
+-- 05.10.2011	Initial version
+-- 06.09.2014	Added General Purpose RAM
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -46,46 +46,48 @@ architecture RTL of MC146818A is
 begin
 	DO <= Dout;
 	
-	process(CLK, A, seconds_reg, seconds_alarm_reg, minutes_reg, minutes_alarm_reg, hours_reg, hours_alarm_reg, weeks_reg, days_reg, month_reg, year_reg, KEYSCANCODE, CMOS_Dout)	
+	process(CLK, A, seconds_reg, seconds_alarm_reg, minutes_reg, minutes_alarm_reg, hours_reg, hours_alarm_reg, weeks_reg, days_reg, month_reg, year_reg, KEYSCANCODE, CMOS_Dout, a_reg, b_reg, c_reg)	
 	begin
 		-- 14 Bytes of Clock and Control Registers Read
 		case A(7 downto 0) is
-			when "00000000" => Dout <= seconds_reg;
-			when "00000001" => Dout <= seconds_alarm_reg;
-			when "00000010" => Dout <= minutes_reg;
-			when "00000011" => Dout <= minutes_alarm_reg;
-			when "00000100" => Dout <= hours_reg;
-			when "00000101" => Dout <= hours_alarm_reg;
-			when "00000110" => Dout <= weeks_reg;
-			when "00000111" => Dout <= days_reg;
-			when "00001000" => Dout <= month_reg;
-			when "00001001" => Dout <= year_reg;
-			when "11110000" => Dout <= KEYSCANCODE;
-			when others 	=> Dout <= CMOS_Dout;   
+			when x"00" => Dout <= seconds_reg;
+			when x"01" => Dout <= seconds_alarm_reg;
+			when x"02" => Dout <= minutes_reg;
+			when x"03" => Dout <= minutes_alarm_reg;
+			when x"04" => Dout <= hours_reg;
+			when x"05" => Dout <= hours_alarm_reg;
+			when x"06" => Dout <= weeks_reg;
+			when x"07" => Dout <= days_reg;
+			when x"08" => Dout <= month_reg;
+			when x"09" => Dout <= year_reg;
+			when x"0a" => Dout <= a_reg;
+			when x"0b" => Dout <= b_reg;
+			when x"0c" => Dout <= c_reg;
+			when x"0d" => Dout <= "10000000";
+			when x"f0" => Dout <= KEYSCANCODE;
+			when others => Dout <= CMOS_Dout;   
 			end case;
 	end process;
 		
 	process(CLK, ENA, RESET)
 	begin
-		if RESET = '1' then
-			a_reg <= "00100110";
-			b_reg <= (others => '0');
-			c_reg <= (others => '0');
-	
-		elsif CLK'event and CLK = '1' then
+		if CLK'event and CLK = '1' then
+			if RESET = '1' then
+				b_reg <= (others => '0');
 			-- RTC register write
-			if WR = '1' and CS = '1' then
+			elsif WR = '1' and CS = '1' then
 				case A(7 downto 0) is
-					when "00000000" => seconds_reg <= DI;
-					when "00000001" => seconds_alarm_reg <= DI;
-					when "00000010" => minutes_reg <= DI;
-					when "00000011" => minutes_alarm_reg <= DI;
-					when "00000100" => hours_reg <= DI;
-					when "00000101" => hours_alarm_reg <= DI;
-					when "00000110" => weeks_reg <= DI;
-					when "00000111" => days_reg <= DI;
-					when "00001000" => month_reg <= DI;
-					when "00001001" => year_reg <= DI;
+					when x"00" => seconds_reg <= DI;
+					when x"01" => seconds_alarm_reg <= DI;
+					when x"02" => minutes_reg <= DI;
+					when x"03" => minutes_alarm_reg <= DI;
+					when x"04" => hours_reg <= DI;
+					when x"05" => hours_alarm_reg <= DI;
+					when x"06" => weeks_reg <= DI;
+					when x"07" => days_reg <= DI;
+					when x"08" => month_reg <= DI;
+					when x"09" => year_reg <= DI;
+					when x"0b" => b_reg <= DI;
 					
 					if b_reg(2) = '0' then -- BCD to BIN convertion
 						if DI(4) = '0' then
@@ -100,7 +102,11 @@ begin
 					when others   => null;
 				end case;
 			end if;
-			if b_reg(7) = '0' and ENA = '1' then
+			
+			if RESET = '1' then
+				a_reg <= "00100110";
+				c_reg <= (others => '0');
+			elsif b_reg(7) = '0' and ENA = '1' then
 				if pre_scaler /= X"000000" then
 					pre_scaler <= pre_scaler - 1;
 					a_reg(7) <= '0';

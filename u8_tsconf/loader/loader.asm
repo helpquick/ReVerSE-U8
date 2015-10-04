@@ -1,16 +1,21 @@
- 		DEVICE	ZXSPECTRUM48
-; -----------------------------------------------------------------[21.09.2014]
-; ReVerSE-U8 Loader Version 0.2.6 By MVV
+; -----------------------------------------------------------------[04.10.2015]
+; ReVerSE-U8 Loader Build 20151004 By MVV, dsp
 ; -----------------------------------------------------------------------------
-; V0.2.2	12.08.2014	первая версия
-; V0.2.6	21.09.2014	RTC Setup
+; 12.08.2014	первая версия
+; 21.09.2014	RTC Setup
+; 22.07.2015	добавлено чтение silicon ID spiflash
+; 04.10.2015	добавлено чтение roms/zxevo.rom из SD
 
-system_port	EQU #0001	; bit2 = 0:loader on, 1:loader off; bit1 = 0:sram<->cpu0, 1:sram<->gs;
-pr_param	EQU #7f00
-page3init 	EQU #7f05      	; RAM mem in  BANK1 (lowest  addr)
-block_16k_cnt 	EQU #7f06
-cursor_pos	EQU #7f07
-buffer		EQU #8000
+ 		DEVICE	ZXSPECTRUM48
+system_port	equ #0001	; bit2: 0=loader on, 1=loader off; bit1: 0=sram<->cpu0, 1=sram<->gs; bit0: 0=m25p40, 1=vs1053b
+pr_param	equ #7f00
+page3init 	equ #7f04      	; RAM mem in  BANK1 (lowest  addr)
+cursor_pos	equ #7f05
+block_16k_cnt 	equ #7f06
+buffer		equ #8000
+time_pos_y	equ #0a
+time_pos_yx	equ #0a00
+TOTAL_PAGE	equ 32
 
 	org #0000
 startprog:
@@ -18,143 +23,145 @@ startprog:
 	ld sp,#7ffe	 	; stack - bank1:(exec code - bank0):destination 
 	
 	xor a
-	ld bc,system_port
-	out (c),a
+	ld bc,system_port	; bit2: 0=loader on, 1=loader off; bit1: 0=sram<->cpu0, 1=sram<->gs; bit0: 0=m25p40, 1=vs1053b
 	out (#fe),a		; цвет бордюра
+	out (c),a
 	call cls		; очистка экрана
 	ld hl,str1
 	call print_str
 
+;------------------------------------------------------------------------------		
+; ID read
+;------------------------------------------------------------------------------		
+ID_READ
+	call spi_start
+	ld d,%10101011		; command ID read
+	call spi_w
+	call spi_r
+	call spi_r
+	call spi_r
+	call spi_r
+	call print_hex
+	call spi_end
 
-	ld bc,#13af
-	in a,(c)
-	ld (page3init),a
+	ld hl,str5
+	call print_str
 
-	xor a
-	LD (block_16k_cnt), A
-
-	ld a,%00000001		; bit2 = 0:loader on, 1:loader off; bit1 = 0:sram<->cpu0, 1:sram<->gs; bit0 = 0:tda1543, 1:m25p40
-	ld bc,#0001
-	out (c),a
-
-
-
-
-
-; 060000 GS 	32K
-
+; 0x060000 = gs105.rom    32K
 ; -----------------------------------------------------------------------------
 ; SPI autoloader
 ; -----------------------------------------------------------------------------
-	CALL spi_start
-	LD D,%00000011	; Command = READ
-	CALL spi_w
+	call spi_start
+	ld d,%00000011		; command = read
+	call spi_w
 
-	LD D,#06	; Address = #060000
-	CALL spi_w
-	LD D,#00
-	CALL spi_w
-	LD D,#00
-	CALL spi_w
-	
-	LD HL,#8000	; GS ROM 32K
-SPI_LOADER1
-	CALL spi_r
-	LD (HL),A
-	INC HL
-	LD A,L
-	OR H
-	JR NZ,SPI_LOADER1
-	
-	ld a,%00000010	; bit2 = 0:loader on, 1:loader off; bit1 = 0:sram<->cpu0, 1:sram<->gs; bit0 = 0:tda1543, 1:m25p40
-	ld bc,#0001
+	ld d,#06		; address = #060000
+	call spi_w
+	ld d,#00
+	call spi_w
+	ld d,#00
+	call spi_w
+
+	ld hl,buffer		; GS ROM 32K
+spi_loader1
+	call spi_r
+	ld (hl),a
+	inc hl
+	ld a,l
+	or h
+	jr nz,spi_loader1
+	ld a,l
+	or h
+	jr nz,spi_loader1
+	call spi_end
+
+	ld a,%00000011
+	ld bc,system_port	; bit2: 0=loader on, 1=loader off; bit1: 0=sram<->cpu0, 1=sram<->gs; bit0: 0=m25p40, 1=vs1053b
 	out (c),a
 
 	ld hl,str3
 	call print_str
 
-	ld hl,str2
+
+	ld hl,str8
 	call print_str
 
 ; -----------------------------------------------------------------------------
-; FAT16 loader
+; SD Loader
 ; -----------------------------------------------------------------------------
-SD_LOADER
-	CALL COM_SD
-	DB 0
-	CP 0
-	JP NZ,ERR
+	ld sp,PWA
+	ld bc,SYC
+	ld a,DEFREQ
+	out(c),a		;SET DEFREQ:%00000010-14MHz
+	;PAGE3
+	ld b,PW3/256
+	in a,(c)		;READ PAGE3 //PW3:#13AF
+	ld (page3init),a	;(page3init) <- SAVE orig PAGE3
+	;PAGE2
+	ld b,PW2/256
+	in a,(c)		;READ PAGE2 //PW2:#12AF 
+	ld e,PG0
+	out (c),e		;SET PAGE2=0xF7
+	ld (PGR),a		;(PGR) <- SAVE orig PAGE2
+	;step_1: INIT SD CARD
+	ld a,#00 		;STREAM: SD_INIT, HDD
+	call FAT_DRV
+	jr nz,ERR		;INIT - FAILED
+	;step_2: find DIR entry
+	ld hl,FES1
+	ld a,#01 		;find DIR entry
+	call FAT_DRV
+	jr nz,ERR		;dir not found
+	ld a,#02		;SET CURR DIR - ACTIVE
+	call FAT_DRV
+	;step_3: find File entry
+	ld hl,FES2
+	ld a,#01		;find File entry
+	call FAT_DRV
+	jr nz,ERR		;file not  found
+	;step_4: download data
+	ld a,#00		;#0 - start page 
 
-	LD HL,#8000
-	LD BC,#0000
-	LD DE,#0000
-	CALL COM_SD
-	DB 2		; читаем MBR
-	LD A,(#81C6)
-	PUSH AF
-	LD E,A
-	LD D,0
-	LD BC,#0000
-	LD HL,#8000
-	CALL COM_SD
-	DB 2		; читаем BOOT RECORD на логическом разделе
-	LD A,(#800E)
-	LD C,A
-	LD HL,(#8016)	; читаем размер FAT-каталога
-	ADD HL,HL	; умножаем на два
-	LD B,0
-	ADD HL,BC	; прибавляем размер Reserved sectors
-	LD C,#20
-	ADD HL,BC	; прибавляем константу из расчета "два каталога FAT" и "размер сектора = 512 байт".
-	POP AF
-	LD C,A
-	ADD HL,BC	; прибавляем смещение между физическими и логическими секторами
+	; Open 1st Page = ROM
+	ld (block_16k_cnt),a	;RESTORE block_16kB_cnt 
+	ld c,a			;page Number
+	ld de,#0000		;offset in PAGE: 
+  	ld b,32			;1 block-512Byte/32bloks-16kB
+	ld a,#03		;code 3: LOAD512(TSFAT.ASM) c
+	call FAT_DRV		;return CDE - Address 
 
 LOAD_16kb
-	push hl        		; (sp)<--hl //load data addr (sector number)
-	ex de,hl       		; de - сектрор для считывания данных 
-	ld a,(block_16k_cnt)	; загружаем ячейку счетчика страниц в a
-	ld bc,#13af
-	out (c),a
+	;Open 2snd Page = ROM 
+	ld a,(block_16k_cnt)	;загружаем ячейку счетчика страниц в A
+	inc a			;lock_16kB_cnt+1  увеличиваем значение на 1 
+	ld (block_16k_cnt),a	;сохраняем новое значение
 
-	ld hl,#c000 		; destination memory : cpu0_a_bus(15 downto 14) = %11
-				; de - начальный сектрор для считывания данных 
-	ld bc,#0000
-	ld a,#20            	; number of sectors : 512 * 32 = 16kb
-	call COM_SD
-	db 3		     	; читаем 16k
-	cp 0
-	jr nz,ERR
+	ld c,a			;page 
+	ld de,#0000		;offset in Win3: 
+	ld b,32			;1 block-512Byte // 32- 16kB
 
-	pop hl		; в стеке был предыдущий стартовый номер сектора для считывания
-	ld de,#0020  
-	add hl,de 
-	ld a,(block_16k_cnt)	; загружаем ячейку счетчика страниц в A
-	inc a
-	ld (block_16k_cnt),a
-	cp 32
-	jr c,LOAD_16kb
-
+	;load data from opened file
+	ld a,#03		;LOAD512(TSFAT.ASM) 
+	call FAT_DRV		;читаем вторые 16kB
+	jr nz,DONE		;EOF -EXIT
+	
+	;CHECK CNT
+	ld a,(block_16k_cnt)	;загружаем ячейку счетчика страниц в A
+	sub TOTAL_PAGE		;проверяем это был последний блок или нет
+	jr nz,LOAD_16kb		;если да то выход, если нет то возврат на 
+DONE
 	ld hl,str3
 	call print_str
-
-	ld a,(page3init)	; RESTORE initial PAGE for Win3
-	ld bc,#c000
-	out (c),a
-	jp RESET_LOADER
-;------------------------------------------------------------------------------		
+	jr RTC_INIT
 ERR
-	ld hl,str_error
+	ld sp,#7ffe
+	ld hl,str_absent
 	call print_str
-	di
-	halt
-stop
-	jp stop
-;==============================================================================		
 
-
-
-RESET_LOADER
+;------------------------------------------------------------------------------		
+; Инициализация RTC
+;------------------------------------------------------------------------------		
+RTC_INIT
 	ld hl,str4		; инициализация RTC
 	call print_str
 
@@ -165,13 +172,13 @@ RESET_LOADER
 label1
 	call print_str
 
-	ld hl,str5
-	call print_str
-
 ;------------------------------------------------------------------------------
 ; VS1053 Init
 ;------------------------------------------------------------------------------
 vs_init
+	ld hl,str9
+	call print_str
+
 	ld a,%00000000          ; xcs=0 xdcs=0
 	out (#05),a
 	ld hl,table
@@ -194,351 +201,15 @@ vs_init1
 	call anykey
 	call mc14818a_init
 
-	ld a,%00000110	; bit2 = 0:loader on, 1:loader off; bit1 = 0:sram<->cpu0, 1:sram<->gs; bit0 = 0:tda1543, 1:m25p40
-	ld bc,#0001
+	ld a,%00000111
+	ld bc,system_port	; bit2: 0=loader on, 1=loader off; bit1: 0=sram<->cpu0, 1=sram<->gs; bit0: 0=m25p40, 1=vs1053b
 	out (c),a
-
 	ld sp,#ffff
-	jp #0000	; запуск системы
+	jp #0000		; запуск системы
 
-
-
-; -----------------------------------------------------------------------------
-; SD Driver
-; -----------------------------------------------------------------------------
-P_DATA		EQU #57
-P_CONF		EQU #77
-
-CMD_09		EQU #49		;SEND_CSD
-CMD_10		EQU #4A		;SEND_CID
-CMD_12		EQU #4C		;STOP_TRANSMISSION
-CMD_17		EQU #51		;READ_SINGLE_BLOCK
-CMD_18		EQU #52		;READ_MULTIPLE_BLOCK
-CMD_24		EQU #58		;WRITE_BLOCK
-CMD_25		EQU #59		;WRITE_MULTIPLE_BLOCK
-CMD_55		EQU #77		;APP_CMD
-CMD_58		EQU #7A		;READ_OCR
-CMD_59		EQU #7B		;CRC_ON_OFF
-ACMD_41		EQU #69		;SD_SEND_OP_COND
-
-Sd_init		EQU 0
-Sd__off		EQU 1
-Rdsingl		EQU 2
-Rdmulti		EQU 3
-Wrsingl		EQU 4
-Wrmulti		EQU 5
-
-COM_SD	
-	EX AF,AF'
-	EX (SP),HL
-	LD A,(HL)
-	INC HL
-	EX (SP),HL
-	ADD A,A
-	PUSH HL
-	LD HL,TABLSDZ
-	ADD A,L
-	LD L,A
-	LD A,H
-	ADC A,0
-	LD H,A
-	LD A,(HL)
-	INC HL
-	LD H,(HL)
-	LD L,A
-	EX AF,AF'
-	EX (SP),HL
-	RET
-
-TABLSDZ	
-	DW SD_INIT	; 0 параметров не требует, на выходе A
-			; смотри выше первые 2 значения
-	DW SD__OFF	; 1 просто вырубает питание карты
-	DW RDSINGL	; 2
-	DW RDMULTI	; 3
-	DW WRSINGL	; 4
-	DW WRMULTI	; 5
-
-SD_INIT	
-	CALL CS_HIGH
-	LD BC,P_DATA
-	LD DE,#10FF
-	OUT (C),E
-	DEC D
-	JR NZ,$-3
-	XOR A
-	EX AF,AF'
-ZAW001	
-	LD HL,CMD00
-	CALL OUTCOM
-	CALL IN_OOUT
-	EX AF,AF'
-	DEC A
-	JR Z,ZAW003
-	EX AF,AF'
-	DEC A
-	JR NZ,ZAW001
-	LD HL,CMD08
-	CALL OUTCOM
-	CALL IN_OOUT
-	IN H,(C)
-	NOP
-	IN H,(C)
-	NOP
-	IN H,(C)
-	NOP
-	IN H,(C)
-	LD HL,0
-	BIT 2,A
-	JR NZ,ZAW006
-	LD H,#40
-ZAW006	
-	LD A,CMD_55
-	CALL OUT_COM
-	CALL IN_OOUT
-	LD A,ACMD_41
-	OUT (C),A
-	NOP
-	OUT (C),H
-	NOP
-	OUT (C),L
-	NOP
-	OUT (C),L
-	NOP
-	OUT (C),L
-	LD A,#FF
-	OUT (C),A
-	CALL IN_OOUT
-	AND A
-	JR NZ,ZAW006
-ZAW004	
-	LD A,CMD_59
-	CALL OUT_COM
-	CALL IN_OOUT
-	AND A
-	JR NZ,ZAW004
-ZAW005	
-	LD HL,CMD16
-	CALL OUTCOM
-	CALL IN_OOUT
-	AND A
-	JR NZ,ZAW005
-CS_HIGH	
-	PUSH AF
-	LD A,3
-	OUT (P_CONF),A
-	XOR A
-	OUT (P_DATA),A
-	POP AF
-	RET
-ZAW003	
-	CALL SD__OFF
-	INC A
-	RET
-SD__OFF	
-	XOR A
-	OUT (P_CONF),A
-	OUT (P_DATA),A
-	RET
-CS__LOW	
-	PUSH AF
-	LD A,1
-	OUT (P_CONF),A
-	POP AF
-	RET
-OUTCOM
-	CALL CS__LOW
-	PUSH BC
-	LD BC,#0600+P_DATA
-	OTIR
-	POP BC
-	RET
-OUT_COM	
-	PUSH BC
-	CALL CS__LOW
-	LD BC,P_DATA
-	OUT (C),A
-	XOR A
-	OUT (C),A
-	NOP
-	OUT (C),A
-	NOP
-	OUT (C),A
-	NOP
-	OUT (C),A
-	DEC A
-	OUT (C),A
-	POP BC
-	RET
-SECM200	
-	PUSH HL
-	PUSH DE
-	PUSH BC
-	PUSH AF
-	PUSH BC
-
-	LD A,CMD_58
-	LD BC,P_DATA
-	CALL OUT_COM
-	CALL IN_OOUT
-	IN A,(C)
-	NOP
-	IN H,(C)
-	NOP
-	IN H,(C)
-	NOP
-	IN H,(C)
-	
-	BIT 6,A
-	POP HL
-	JR NZ,SECN200
-	EX DE,HL
-	ADD HL,HL
-	EX DE,HL
-	ADC HL,HL
-	LD H,L
-	LD L,D
-	LD D,E
-	LD E,0
-SECN200	
-	POP AF
-	LD BC,P_DATA
-	OUT (C),A
-	NOP
-	OUT (C),H
-	NOP
-	OUT (C),L
-	NOP
-	OUT (C),D
-	NOP
-	OUT (C),E
-	LD A,#FF
-	OUT (C),A
-	POP BC
-	POP DE
-	POP HL
-	RET
-IN_OOUT	
-	PUSH DE
-	LD DE,#20FF
-IN_WAIT	
-	IN A,(P_DATA)
-	CP E
-	JR NZ,IN_EXIT
-IN_NEXT	
-	DEC D
-	JR NZ,IN_WAIT
-IN_EXIT	
-	POP DE
-	RET
-
-CMD00	DB #40,#00,#00,#00,#00,#95	; GO_IDLE_STATE
-CMD08	DB #48,#00,#00,#01,#AA,#87	; SEND_IF_COND
-CMD16	DB #50,#00,#00,#02,#00,#FF	; SET_BLOCKEN
-
-RD_SECT	
-	PUSH BC
-	LD BC,P_DATA
-	INIR 
-	NOP
-	INIR
-	NOP
-	IN A,(C)
-	NOP
-	IN A,(C)
-	POP BC
-	RET
-WR_SECT	
-	PUSH BC
-	LD BC,P_DATA
-	OTIR
-	NOP
-	OTIR
-	LD A,#FF
-	OUT (C),A
-	NOP
-	OUT (C),A
-	POP BC
-	RET
-RDMULTI
-	EX AF,AF'
-	LD A,CMD_18
-	CALL SECM200
-	EX AF,AF'
-RDMULT1
-	EX AF,AF'
-	CALL IN_OOUT
-	CP #FE
-	JR NZ,$-5
-	CALL RD_SECT
-	EX AF,AF'
-	DEC A
-	JR NZ,RDMULT1
-	LD A,CMD_12
-	CALL OUT_COM
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	JP CS_HIGH
-RDSINGL
-	LD A,CMD_17
-	CALL SECM200
-	CALL IN_OOUT
-	CP #FE
-	JR NZ,$-5
-	CALL RD_SECT
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	JP CS_HIGH
-WRSINGL
-	LD A,CMD_24
-	CALL SECM200
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	LD A,#FE
-	CALL WR_SECT
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	JP CS_HIGH
-WRMULTI
-	EX AF,AF'
-	LD A,CMD_25
-	CALL SECM200
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	EX AF,AF'
-WRMULT1
-	EX AF,AF'
-	LD A,#FC
-	CALL WR_SECT
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	EX AF,AF'
-	DEC A
-	JR NZ,WRMULT1
-	LD C,P_DATA
-	LD A,#FD
-	OUT (C),A
-	CALL IN_OOUT
-	INC A
-	JR NZ,$-4
-	JP CS_HIGH		
-
-
-
-
-
-
-
-
-
-
+;------------------------------------------------------------------------------
 ; Ожидание клавиши
+;------------------------------------------------------------------------------
 anykey1
 	ld hl,str0
 	call print_str
@@ -548,7 +219,7 @@ anykey2
 	cp #ff
 	jr nz,anykey2
 anykey
-	ld hl,#0900		; координаты вывода даты и времени
+	ld hl,time_pos_yx		; координаты вывода даты и времени
 	ld (pr_param),hl
 	call rtc_read		; чтение даты и времени
 	call rtc_data		; вывод
@@ -559,9 +230,6 @@ anykey
 	cp #5a			; <ENTER> ?
 	jr nz,anykey
 	ret
-
-; _____________________________________________________________________________
-	
 
 ; -----------------------------------------------------------------------------
 ; I2C PCF8583 read
@@ -889,9 +557,9 @@ table
 	db #64,#61,#74,#61	;data
 	db #ff,#ff,#ff,#ff
 
-;==============================================================================
-
+; -----------------------------------------------------------------------------	
 ; clear screen
+; -----------------------------------------------------------------------------	
 cls
 	xor a
 	out (#fe),a
@@ -903,7 +571,9 @@ cls1
 	jr z,cls1
 	ret
 
+; -----------------------------------------------------------------------------	
 ; print string i: hl - pointer to string zero-terminated
+; -----------------------------------------------------------------------------	
 print_str
 	ld a,(hl)
 	cp 17
@@ -1095,8 +765,6 @@ dectb_w
 	db 10,0,0		; 10
 	db 1,0,0		; 1
 
-
-
 ; -----------------------------------------------------------------------------	
 ; Сдвиг изображения вверх на один символ
 ; -----------------------------------------------------------------------------	
@@ -1177,9 +845,7 @@ attr_addr
         ld l,a
 	ret
 
-
-
-
+; -----------------------------------------------------------------------------	
 ; RTC Setup
 ; -----------------------------------------------------------------------------
 ; a = позиция		ix = адрес
@@ -1205,7 +871,7 @@ print_cursor1
 	ld d,(hl)		; координата х
 	inc hl
 	ld b,(hl)		; ширина курсора
-	ld e,#09
+	ld e,time_pos_y
 	call attr_addr
 print_cursor2	
 	ld (hl),c
@@ -1213,8 +879,6 @@ print_cursor2
 	djnz print_cursor2
 	ret
 
-
-	
 ; -----------------------------------------------------------------------------
 rtc_setup
 	ld hl,str6
@@ -1279,7 +943,7 @@ key_up1
 	daa
 	ld (de),a
 key_up2
-	ld hl,#0900		; координаты вывода даты и времени
+	ld hl,time_pos_yx	; координаты вывода даты и времени
 	ld (pr_param),hl
 	call rtc_pac
 	call rtc_data		; вывод
@@ -1311,8 +975,10 @@ key_enter
 	call i2c
 	jp anykey1
 
-rtc_depac
+; -----------------------------------------------------------------------------	
 ; расспаковка
+; -----------------------------------------------------------------------------	
+rtc_depac
 	ld a,(buffer+4)		; час
 	and #3f
 	ld (buffer+256),a
@@ -1339,8 +1005,10 @@ rtc_depac
 	ld (buffer+16),a
 	ret
 
-rtc_pac
+; -----------------------------------------------------------------------------	
 ; упаковка
+; -----------------------------------------------------------------------------	
+rtc_pac
 	ld a,(buffer+256)
 	ld (buffer+4),a		; 04 hours
 	ld a,(buffer+16)	; year
@@ -1369,24 +1037,20 @@ rtc_pac
 ;25 (0x19),y		- изменить позицию по y
 ;0			- конец строки
 
-str1	
-	db 23,0,0,17,#47,"ReVerSE-U8 DevBoard  (c)MVV,2014",17,7,13
-	db 17,7,"FPGA SoftCore - TSConf v0.2.6",13
-	db "(build 20140921)",13,13
-	db "Loading gs.rom...",0
-str3
-	db 17,4," Done",17,7,13,0
-str4
-	db 13,"RTC Data read...",0
-str0
-	db 23,0,22,"Press S to run RTC Setup        "
-	db         "Press ENTER to Resume          ",0
+str1	db 23,0,0,17,#47,"ReVerSE-U8 DevBoard",17,7
+	db 13,13,"FPGA SoftCore - TSConf"
+	db 13,"(build 20151004) By MVV"
+	db 13,13,"ASP configuration device ID 0x",0	; EPCS1	0x10 (1 Mb), EPCS4 0x12 (4 Mb), EPCS16 0x14 (16 Mb), EPCS64 0x16 (64 Mb)
+str5	db "Copying data from FLASH...",0
+str8	db 13,"Loading: roms/zxevo.rom...",0
+str3	db 17,4," Done",17,7,0
+str4	db 13,13,"RTC data read...",0
+str0	db 23,0,22,"Press ENTER to continue         "
+	db	   "S: RTC Setup  PrtScr: 49Hz/60Hz",0
 str_error
-	db 17,2," Error",17,7,13,0
-str2
-	db "Loading zxevo.rom...",0
-str5
-	db 13,13,"Init VS1053b...",0
+	db 17,2," Error",17,7,0
+str9
+	db 13,13,13,"Init VS1053b...",0
 str6
 	db 23,0,22,"<>:Select Item   ENTER:Save&Exit"
 	db "^",127,  ":Change Values   ESC:Abort   ",0
@@ -1406,11 +1070,21 @@ cursor_pos_data
 
 day
 	db "Sun",0,"Mon",0,"Tue",0,"Wed",0,"Thu",0,"Fri",0,"Sat",0,"Err",0
+FES1	
+	db #10 		;flag (#00 - file, #10 - dir)
+	db "ROMS"	;DIR name
+	db #00
+FES2
+	db #00
+	db "ZXEVO.ROM"    ;file name //
+	db #00
 
+	INCLUDE "TSFAT.ASM"
 font	
 	INCBIN "font.bin"
 
 
-		savebin "loader.bin",startprog, 8192
-;		savesna "loader.sna",startprog
+	savebin "loader.bin",startprog, 8192
+;	savesna "loader.sna",startprog
 
+	display "Size of ROM is: ",/a, $

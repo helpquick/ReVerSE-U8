@@ -1,7 +1,7 @@
 -------------------------------------------------------------------[05.10.2011]
 -- PS/2 lowlevel driver
 -------------------------------------------------------------------------------
--- V0.1 	05.10.2011	первая версия
+-- 05.10.2011	Initial version
 
 -- clockFilter  - Number of clock cycles used in filtering the PS/2 clock.
 --                This suppresses transient and echo effects on the cable.

@@ -1,7 +1,7 @@
 -------------------------------------------------------------------[15.10.2011]
 -- I2C Controller for PCF8583
 -------------------------------------------------------------------------------
--- V0.1 	15.10.2011	первая версия
+-- 15.10.2011	Initial version
 
 -- The I2C core provides for four register addresses 
 -- that the CPU can read or writen to:

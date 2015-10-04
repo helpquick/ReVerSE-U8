@@ -68,9 +68,6 @@ module zports(
 	//-------------------------
 	output reg [3:0] fddvirt,
 	
-	//output reg [2:0] im2v_frm,
-	//output reg [2:0] im2v_lin,
-	//output reg [2:0] im2v_dma,
 	output reg [7:0] intmask,
 
 	output wire [8:0] dmaport_wr,
@@ -90,14 +87,14 @@ module zports(
 	input  wire        tape_read,
 
 // IDE interface
-	input  wire [15:0] ide_in,
-	output wire [15:0] ide_out,
-	output wire        ide_cs0_n,
-	output wire        ide_cs1_n,
-	output wire        ide_req,
-	input  wire        ide_stb,
-	input  wire        ide_ready,
-	output reg		    ide_stall,
+//	input  wire [15:0] ide_in,
+//	output wire [15:0] ide_out,
+//	output wire        ide_cs0_n,
+//	output wire        ide_cs1_n,
+//	output wire        ide_req,
+//	input  wire        ide_stb,
+//	input  wire        ide_ready,
+//	output reg		    ide_stall,
 
 	input  wire [ 4:0] keys_in, // keys (port FE)
 	input  wire [ 7:0] mus_in,  // mouse (xxDF)
@@ -136,15 +133,15 @@ module zports(
 
 ///////////////////=========RESET ============================
    //---SELECT ROM PAGE0---------
-	localparam   DOS_RESET = 1'h1;         //DOS-ON  
+	localparam DOS_RESET = 1'h1;         //DOS-ON  
 	//-----------rampage value after RESET --------------------
-	localparam   CPU_BANK_0_RESET = 8'h00; //not used for mode3
-	localparam   CPU_BANK_1_RESET = 8'h05; //VIDEO PAGE =5
-	localparam   CPU_BANK_2_RESET = 8'h02; //RAM PAGE   =2
-	localparam   CPU_BANK_3_RESET = 8'h00; //WR 7FFD
+	localparam CPU_BANK_0_RESET = 8'h00; //not used for mode3
+	localparam CPU_BANK_1_RESET = 8'h05; //VIDEO PAGE =5
+	localparam CPU_BANK_2_RESET = 8'h02; //RAM PAGE   =2
+	localparam CPU_BANK_3_RESET = 8'h00; //WR 7FFD
 	
-	localparam	 MEMCONF_RESET    = 8'h04; // xtpage[0] = xt_page[7:0], 
-	localparam	 CACHECONF_RESET  = 4'h0;  // disable
+	localparam MEMCONF_RESET    = 8'h04; // xtpage[0] = xt_page[7:0], 
+	localparam CACHECONF_RESET  = 4'h0;  // disable
 	//---SELECT PENTAGON Config--------------
 	//localparam	 MEMCONF_RESET    = 8'hC0; // MODE3, normal map
 	//rampage[3] <= (MODE3) {2'b0,7ffd[5],7ffd[7:6], 7ffd[2:0]}; -PENTAGON
@@ -201,18 +198,18 @@ module zports(
    assign porthit =
        ((loa==PORTFE) || (loa==PORTXT) || (loa==PORTFD) || (loa==COVOX))
 		 || ((loa==PORTF7) && !dos)
-       || ide_all
+//       || ide_all
 		 || ((vg_port || vgsys_port) && dos)
        || ((loa==KJOY) && !dos)
 		 || (loa==KMOUSE)
        || (((loa==SDCFG) || (loa==SDDAT)) && (!dos || vdos))
        || (loa==COMPORT);
 
-	wire ide_all = ide_even || ide_port11;
-	wire ide_even = (loa[2:0] == 3'b000) && (loa[3] != loa[4]);			// even ports
-   wire ide_port11 = (loa==NIDE11);									// 11
-   wire ide_port10 = (loa==NIDE10);									// 10
-   wire ide_portc8 = (loa==NIDEC8);									// C8
+//	wire ide_all = ide_even || ide_port11;
+//	wire ide_even = (loa[2:0] == 3'b000) && (loa[3] != loa[4]);			// even ports
+//   wire ide_port11 = (loa==NIDE11);									// 11
+//   wire ide_port10 = (loa==NIDE10);									// 10
+//   wire ide_portc8 = (loa==NIDEC8);									// C8
 
    wire vg_port = (loa==VGCOM) | (loa==VGTRK) | (loa==VGSEC) | (loa==VGDAT);
    wire vgsys_port = (loa==VGSYS);
@@ -254,20 +251,20 @@ module zports(
 	begin
 		case (loa)
 		PORTFE:
-			dout = {1'b1, tape_read, 1'b0, keys_in};
+//			dout = {1'b1, tape_read, 1'b0, keys_in};
+			dout = {1'b1, tape_read, 1'b1, keys_in};	// MVV 31.10.2014
 
-		NIDE10,NIDE30,NIDE50,NIDE70,NIDE90,NIDEB0,NIDED0,NIDEF0,NIDE08,NIDE28,NIDE48,NIDE68,NIDE88,NIDEA8,NIDEC8,NIDEE8:
-			dout = iderdeven;
-		NIDE11:
-			dout = iderdodd;
+//		NIDE10,NIDE30,NIDE50,NIDE70,NIDE90,NIDEB0,NIDED0,NIDEF0,NIDE08,NIDE28,NIDE48,NIDE68,NIDE88,NIDEA8,NIDEC8,NIDEE8:
+//			dout = iderdeven;
+//		NIDE11:
+//			dout = iderdodd;
 
         PORTXT:     //--hAF
             begin
             case (hoa)
 
             XSTAT:
-//                dout = {1'b0, pwr_up_reg, 6'b0};
-                dout = {1'b0, pwr_up_reg, 6'b000011};	// MVV IDE Video DAC Added (���������� ������� �������� $00AF. 2 ������� ���� ��������� ������: 0 (1� �������) ��� 3 (2�))
+                dout = {1'b0, pwr_up_reg, 6'b000011};	// MVV IDE Video DAC Added (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ $00AF. 2 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: 0 (1ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½) ï¿½ï¿½ï¿½ 3 (2ï¿½))
             //--ADDR  h27AF
             DMASTAT: //-8'h27
                 dout = {dma_act, 7'b0};
@@ -483,17 +480,6 @@ module zports(
 				cacheconf <= din[3:0];
 			if (hoa == MEMCONF) // & !lock_conf
 				memconf <= din;
-			//================================	
-			//if (hoa == IM2VECT)
-			//begin
-			//	if (din[6:4] == INTFRM)
-			//		im2v_frm <= din[3:1];
-			//	if (din[6:4] == INTLIN)
-			//		im2v_lin <= din[3:1];
-			//	if (din[6:4] == INTDMA)
-			//		im2v_dma <= din[3:1];
-			//end
-			//================================
 			if (hoa == FDDVIRT)
 				fddvirt <= din[3:0];
 			if (hoa == INTMASK)
@@ -612,49 +598,49 @@ module zports(
 
 // IDE ports
     // do NOT generate IDE write, if neither of ide_wrhi|lo latches set and writing to NIDE10
-	wire ide_cs0 = ide_even && !ide_portc8;
-	wire ide_cs1 = ide_portc8;
-	wire ide_rd = rd && !(ide_rd_latch && ide_port10);
-	wire ide_wr = wr && !(!ide_wrlo_latch && !ide_wrhi_latch && ide_port10);
-   assign ide_req = iorq_s && ide_even && (ide_rd || ide_wr);
-	assign ide_cs0_n = !ide_cs0;
-	assign ide_cs1_n = !ide_cs1;
+//	wire ide_cs0 = ide_even && !ide_portc8;
+//	wire ide_cs1 = ide_portc8;
+//	wire ide_rd = rd && !(ide_rd_latch && ide_port10);
+//	wire ide_wr = wr && !(!ide_wrlo_latch && !ide_wrhi_latch && ide_port10);
+//	assign ide_req = iorq_s && ide_even && (ide_rd || ide_wr);
+//	assign ide_cs0_n = !ide_cs0;
+//	assign ide_cs1_n = !ide_cs1;
 
 	
-	always @(posedge clk)
-		if (ide_req)
-			ide_stall <= 1'b1;
-		else if (ide_ready)
-			ide_stall <= 1'b0;
+//	always @(posedge clk)
+//		if (ide_req)
+//			ide_stall <= 1'b1;
+//		else if (ide_ready)
+//			ide_stall <= 1'b0;
 	
 	
 	// control read & write triggers, which allow nemo-divide mod to work.
 	// read trigger:
-	reg ide_rd_trig;  // nemo-divide read trigger
-	always @(posedge zclk)
-	begin
-		if (ide_port10 && port_rd && !ide_rd_trig)
-			ide_rd_trig <= 1'b1;
-		else if (ide_all && (port_rd || port_wr))
-			ide_rd_trig <= 1'b0;
-	end
+//	reg ide_rd_trig;  // nemo-divide read trigger
+//	always @(posedge zclk)
+//	begin
+//		if (ide_port10 && port_rd && !ide_rd_trig)
+//			ide_rd_trig <= 1'b1;
+//		else if (ide_all && (port_rd || port_wr))
+//			ide_rd_trig <= 1'b0;
+//	end
 
 
     // two triggers for write sequence
-	reg ide_wrlo_trig,  ide_wrhi_trig;  // nemo-divide write triggers
-	always @(posedge zclk)
-	if (ide_all && (port_rd || port_wr))
-	begin
-		if (ide_port11 && port_wr)
-			ide_wrhi_trig <= 1'b1;
-		else
-			ide_wrhi_trig <= 1'b0;
-
-		if (ide_port10 && port_wr && !ide_wrhi_trig && !ide_wrlo_trig)
-			ide_wrlo_trig <= 1'b1;
-		else
-			ide_wrlo_trig <= 1'b0;
-	end
+//	reg ide_wrlo_trig,  ide_wrhi_trig;  // nemo-divide write triggers
+//	always @(posedge zclk)
+//	if (ide_all && (port_rd || port_wr))
+//	begin
+//		if (ide_port11 && port_wr)
+//			ide_wrhi_trig <= 1'b1;
+//		else
+//			ide_wrhi_trig <= 1'b0;
+//
+//		if (ide_port10 && port_wr && !ide_wrhi_trig && !ide_wrlo_trig)
+//			ide_wrlo_trig <= 1'b1;
+//		else
+//			ide_wrlo_trig <= 1'b0;
+//	end
 
 
 	// normal read: #10(low), #11(high)
@@ -663,53 +649,53 @@ module zports(
 	// normal write: #11(high), #10(low)
 	// divide write: #10(low),  #10(high)
 
-	reg  [15:0] idewrreg; // write register, either low or high part is pre-written here,
+//	reg  [15:0] idewrreg; // write register, either low or high part is pre-written here,
 	                      // while other part is out directly from Z80 bus
-	always @(posedge zclk)
-	begin
-		if (port_wr && ide_port11)
-			idewrreg[15:8] <= din;
+//	always @(posedge zclk)
+//	begin
+//		if (port_wr && ide_port11)
+//			idewrreg[15:8] <= din;
 
-		if (port_wr && ide_port10 && !ide_wrlo_trig)
-			idewrreg[ 7:0] <= din;
-	end
+//		if (port_wr && ide_port10 && !ide_wrlo_trig)
+//			idewrreg[ 7:0] <= din;
+//	end
 
 
 	// generate read cycles for IDE as usual, except for reading #10
 	// instead of #11 for high byte (nemo-divide). I use additional latch
 	// since 'ide_rd_trig' clears during second Z80 IO read cycle to #10
-	reg ide_rd_latch; // to save state of trigger during read cycle
-	always @*
-        if (!rd)
-            ide_rd_latch <= ide_rd_trig;
+//	reg ide_rd_latch; // to save state of trigger during read cycle
+//	always @*
+//       if (!rd)
+//           ide_rd_latch <= ide_rd_trig;
 
-	reg ide_wrlo_latch, ide_wrhi_latch; // save state during write cycles
-	always @*
-        if (!wr)
-        begin
-            ide_wrlo_latch <= ide_wrlo_trig; // same for write triggers
-            ide_wrhi_latch <= ide_wrhi_trig;
-        end
+//	reg ide_wrlo_latch, ide_wrhi_latch; // save state during write cycles
+//	always @*
+//        if (!wr)
+//        begin
+//            ide_wrlo_latch <= ide_wrlo_trig; // same for write triggers
+//            ide_wrhi_latch <= ide_wrhi_trig;
+//        end
 
 
 	// data read by Z80 from IDE
 //	wire idein_lo_rd  = port_rd && ide_port10 && (!ide_rd_trig);                      // while high part is remembered here
-	wire [7:0] iderdodd = iderdreg[15:8];                                               // read data from "odd" port (#11)
-	wire [7:0] iderdeven = (ide_rd_latch && ide_port10) ? iderdreg[15:8] : iderdreg[7:0];  // to control read data from "even" ide ports (all except #11)
+//	wire [7:0] iderdodd = iderdreg[15:8];                                               // read data from "odd" port (#11)
+//	wire [7:0] iderdeven = (ide_rd_latch && ide_port10) ? iderdreg[15:8] : iderdreg[7:0];  // to control read data from "even" ide ports (all except #11)
 	// wire [7:0] iderdeven = (ide_rd_latch && ide_port10) ? idehiin[7:0] : ide_in[7:0];  // to control read data from "even" ide ports (all except #11)
 
-	reg [15:0] iderdreg;
+//	reg [15:0] iderdreg;
 	// reg [7:0] idehiin;                  // IDE high part read register: low part is read directly to Z80 bus,
-	always @(posedge clk)
-        if (ide_stb)
-			iderdreg <= ide_in;
+//	always @(posedge clk)
+//       if (ide_stb)
+//			iderdreg <= ide_in;
         // if (idein_lo_rd)
 			// idehiin <= ide_in[15:8];
 
 
 	// data written to IDE from Z80
-	wire [7:0] ideout1 = ide_wrhi_latch ? idewrreg[15:8] : din[ 7:0];
-	wire [7:0] ideout0 = ide_wrlo_latch ? idewrreg[ 7:0] : din[ 7:0];
-   assign ide_out = {ideout1, ideout0};
+//	wire [7:0] ideout1 = ide_wrhi_latch ? idewrreg[15:8] : din[ 7:0];
+//	wire [7:0] ideout0 = ide_wrlo_latch ? idewrreg[ 7:0] : din[ 7:0];
+//   assign ide_out = {ideout1, ideout0};
 
 endmodule

@@ -67,7 +67,7 @@ use work.T80_Pack.all;
 entity T80se is
 	generic(
 		Mode : integer := 0;	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
-		T2Write : integer := 0;	-- 0 => WR_n active in T3, /=0 => WR_n active in T2
+		T2Write : integer := 1;	-- 0 => WR_n active in T3, /=0 => WR_n active in T2
 		IOWait : integer := 1	-- 0 => Single cycle I/O, 1 => Std I/O cycle
 	);
 	port(
@@ -88,7 +88,14 @@ entity T80se is
 		BUSAK_n		: out std_logic;
 		A			: out std_logic_vector(15 downto 0);
 		DI			: in std_logic_vector(7 downto 0);
-		DO			: out std_logic_vector(7 downto 0)
+		DO			: out std_logic_vector(7 downto 0);
+
+		SavePC      : out std_logic_vector(15 downto 0);
+		SaveINT     : out std_logic_vector(7 downto 0);
+		RestorePC   : in std_logic_vector(15 downto 0);
+		RestoreINT  : in std_logic_vector(7 downto 0);
+		
+		RestorePC_n : in std_logic
 	);
 end T80se;
 
@@ -129,24 +136,32 @@ begin
 			DO => DO,
 			MC => MCycle,
 			TS => TState,
-			IntCycle_n => IntCycle_n);
+			IntCycle_n => IntCycle_n,
 
-	process (RESET_n, CLK_n)
+			SavePC => SavePC,
+			SaveINT => SaveINT,
+			RestorePC => RestorePC,
+			RestoreINT => RestoreINT,
+			
+			RestorePC_n => RestorePC_n );
+
+
+	process (CLK_n)
 	begin
-		if RESET_n = '0' then
-			RD_n <= '1';
-			WR_n <= '1';
-			IORQ_n <= '1';
-			MREQ_n <= '1';
-			DI_Reg <= "00000000";
-		elsif CLK_n'event and CLK_n = '1' then
-			if CLKEN = '1' then
+		if CLK_n'event and CLK_n = '1' then
+			if RESET_n = '0' then
+				RD_n <= '1';
+				WR_n <= '1';
+				IORQ_n <= '1';
+				MREQ_n <= '1';
+				DI_Reg <= "00000000";
+			elsif CLKEN = '1' then
 				RD_n <= '1';
 				WR_n <= '1';
 				IORQ_n <= '1';
 				MREQ_n <= '1';
 				if MCycle = "001" then
-					if TState = "001" or (TState = "010" and Wait_n = '0') then
+					if TState = "001" or TState = "010" then
 						RD_n <= not IntCycle_n;
 						MREQ_n <= not IntCycle_n;
 						IORQ_n <= IntCycle_n;
@@ -155,7 +170,7 @@ begin
 						MREQ_n <= '0';
 					end if;
 				else
-					if (TState = "001" or (TState = "010" and Wait_n = '0')) and NoRead = '0' and Write = '0' then
+					if (TState = "001" or TState = "010") and NoRead = '0' and Write = '0' then
 						RD_n <= '0';
 						IORQ_n <= not IORQ;
 						MREQ_n <= IORQ;
@@ -167,7 +182,7 @@ begin
 							MREQ_n <= IORQ;
 						end if;
 					else
-						if (TState = "001" or (TState = "010" and Wait_n = '0')) and Write = '1' then
+						if (TState = "001" or TState = "010") and Write = '1' then
 							WR_n <= '0';
 							IORQ_n <= not IORQ;
 							MREQ_n <= IORQ;
@@ -177,6 +192,7 @@ begin
 				if TState = "010" and Wait_n = '1' then
 					DI_Reg <= DI;
 				end if;
+				
 			end if;
 		end if;
 	end process;
